@@ -76,6 +76,7 @@ void test_parser_verify_entity(SourceFile *sf, const char *entity,
 #include "parsers/test_actionscript.h"
 #include "parsers/test_ada.h"
 #include "parsers/test_assembler.h"
+#include "parsers/test_augeas.h"
 #include "parsers/test_autoconf.h"
 #include "parsers/test_automake.h"
 #include "parsers/test_awk.h"
@@ -90,6 +91,7 @@ void test_parser_verify_entity(SourceFile *sf, const char *entity,
 #include "parsers/test_clearsilvertemplate.h"
 #include "parsers/test_clearsilver.h"
 #include "parsers/test_clojure.h"
+#include "parsers/test_coq.h"
 #include "parsers/test_cs_aspx.h"
 #include "parsers/test_csharp.h"
 #include "parsers/test_css.h"
@@ -102,19 +104,23 @@ void test_parser_verify_entity(SourceFile *sf, const char *entity,
 #include "parsers/test_erlang.h"
 #include "parsers/test_exheres.h"
 #include "parsers/test_factor.h"
+#include "parsers/test_forth.h"
 #include "parsers/test_fortran.h"
 #include "parsers/test_fsharp.h"
 #include "parsers/test_glsl.h"
+#include "parsers/test_golang.h"
 #include "parsers/test_groovy.h"
 #include "parsers/test_haml.h"
 #include "parsers/test_haskell.h"
 #include "parsers/test_haxe.h"
 #include "parsers/test_html.h"
 #include "parsers/test_idl_pvwave.h"
+#include "parsers/test_jam.h"
 #include "parsers/test_java.h"
 #include "parsers/test_javascript.h"
 #include "parsers/test_jsp.h"
 #include "parsers/test_lisp.h"
+#include "parsers/test_logtalk.h"
 #include "parsers/test_lua.h"
 #include "parsers/test_make.h"
 #include "parsers/test_matlab.h"
@@ -122,6 +128,7 @@ void test_parser_verify_entity(SourceFile *sf, const char *entity,
 #include "parsers/test_metapost.h"
 #include "parsers/test_mxml.h"
 #include "parsers/test_nix.h"
+#include "parsers/test_nsis.h"
 #include "parsers/test_objective_j.h"
 #include "parsers/test_ocaml.h"
 #include "parsers/test_octave.h"
@@ -130,7 +137,10 @@ void test_parser_verify_entity(SourceFile *sf, const char *entity,
 #include "parsers/test_pike.h"
 #include "parsers/test_puppet.h"
 #include "parsers/test_python.h"
+#include "parsers/test_qml.h"
 #include "parsers/test_r.h"
+#include "parsers/test_racket.h"
+#include "parsers/test_rebol.h"
 #include "parsers/test_rexx.h"
 #include "parsers/test_rhtml.h"
 #include "parsers/test_ruby.h"
@@ -250,6 +260,7 @@ void all_parser_tests() {
   all_actionscript_tests();
   all_ada_tests();
   all_assembler_tests();
+  all_augeas_tests();
   all_autoconf_tests();
   all_automake_tests();
   all_awk_tests();
@@ -264,6 +275,7 @@ void all_parser_tests() {
   all_clearsilver_template_tests();
   all_clearsilver_tests();
   all_clojure_tests();
+  all_coq_tests();
   all_cs_aspx_tests();
   all_csharp_tests();
   all_css_tests();
@@ -276,6 +288,7 @@ void all_parser_tests() {
   all_erlang_tests();
   all_exheres_tests();
   all_factor_tests();
+  all_forth_tests();
   all_fortran_tests();
   all_fsharp_tests();
   all_glsl_tests();
@@ -285,10 +298,12 @@ void all_parser_tests() {
   all_haxe_tests();
   all_html_tests();
   all_idl_pvwave_tests();
+  all_jam_tests();
   all_java_tests();
   all_javascript_tests();
   all_jsp_tests();
   all_lisp_tests();
+  all_logtalk_tests();
   all_lua_tests();
   all_make_tests();
   all_matlab_tests();
@@ -296,6 +311,7 @@ void all_parser_tests() {
   all_metapost_tests();
   all_mxml_tests();
   all_nix_tests();
+  all_nsis_tests();
   all_objective_j_tests();
   all_ocaml_tests();
   all_octave_tests();
@@ -304,6 +320,8 @@ void all_parser_tests() {
   all_pike_tests();
   all_python_tests();
   all_r_tests();
+  all_racket_tests();
+  all_rebol_tests();
   all_rexx_tests();
   all_rhtml_tests();
   all_ruby_tests();

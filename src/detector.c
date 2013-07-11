@@ -2,6 +2,7 @@
 // See COPYING for license information.
 
 #include <ctype.h>
+#include <magic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,94 @@
 # define mkstemp(p) _open(_mktemp(p), _O_CREAT | _O_SHORT_LIVED | _O_EXCL)
 #endif
 
+/* Parse the output of libmagic and return a language, if any.
+ * The contents of string `line` will be destroyed.
+ */
+const char *magic_parse(char *line) {
+  char *p, *pe;
+  char *eol = line + strlen(line);
+
+  char buf[80];
+  size_t length;
+
+  for (p = line; p < eol; p++) *p = tolower(*p);
+  p = strstr(line, "script text");
+  if (p && p == line) { // /^script text(?: executable)? for \w/
+    p = strstr(line, "for ");
+    if (p) {
+      p += 4;
+      pe = p;
+      while (isalnum(*pe)) pe++;
+      length = pe - p;
+      strncpy(buf, p, length);
+      buf[length] = '\0';
+      struct LanguageMap *rl = ohcount_hash_language_from_name(buf, length);
+      if (rl) return(rl->name);
+    }
+  } else if (p) { // /(\w+)(?: -\w+)* script text/
+    do {
+      p--;
+      pe = p;
+      while (*p == ' ') p--;
+      while (p != line && isalnum(*(p - 1))) p--;
+      if (p != line && *(p - 1) == '-') p--;
+    } while (*p == '-'); // Skip over any switches.
+    length = pe - p;
+    strncpy(buf, p, length);
+    buf[length] = '\0';
+    struct LanguageMap *rl = ohcount_hash_language_from_name(buf, length);
+    if (rl) return(rl->name);
+  } else if (strstr(line, "xml")) return(LANG_XML);
+
+  return NULL;
+}
+
+/* Use libmagic to detect file language
+ */
+const char *detect_language_magic(SourceFile *sourcefile) {
+  char line[80];
+
+  magic_t cookie = magic_open(MAGIC_NONE);
+  if (cookie == NULL) {
+    fprintf(stderr, "libmagic: %s\n", magic_error(cookie));
+    exit(1);
+  }
+  if (magic_load(cookie, NULL) != 0) {
+    fprintf(stderr, "libmagic: %s\n", magic_error(cookie));
+    magic_close(cookie);
+    exit(1);
+  }
+
+  if (sourcefile->diskpath) {
+    const char *magic = magic_file(cookie, sourcefile->diskpath);
+    if (magic == NULL) {
+      fprintf(stderr, "libmagic: %s\n", magic_error(cookie));
+      magic_close(cookie);
+      exit(1);
+    }
+    strncpy(line, magic, sizeof(line));
+    line[sizeof(line)-1] = '\0';
+  } else {
+    char *p = ohcount_sourcefile_get_contents(sourcefile);
+    if (!p) return NULL;
+
+    const char *magic = magic_buffer(cookie, p, strlen(p));
+    if (magic == NULL) {
+      fprintf(stderr, "libmagic: %s\n", magic_error(cookie));
+      magic_close(cookie);
+      exit(1);
+    }
+    strncpy(line, magic, sizeof(line));
+    line[sizeof(line)-1] = '\0';
+  }
+
+  magic_close(cookie);
+
+  return magic_parse(line);
+}
+
+/* Use all available means to detect file language
+ */
 const char *ohcount_detect_language(SourceFile *sourcefile) {
   const char *language = NULL;
   char *p, *pe;
@@ -116,69 +205,9 @@ const char *ohcount_detect_language(SourceFile *sourcefile) {
 
   // Attempt to detect based on Unix 'file' command.
   if(!language) {
-    int tmpfile = 0;
-    char *path = sourcefile->filepath;
-    if (sourcefile->diskpath)
-      path = sourcefile->diskpath;
-    if (access(path, F_OK) != 0) { // create temporary file
-      path = malloc(21);
-      strncpy(path, "/tmp/ohcount_XXXXXXX\0", 21);
-      int fd = mkstemp(path);
-      char *contents = ohcount_sourcefile_get_contents(sourcefile);
-      log_it("contents:");
-      log_it(contents);
-      length = contents ? strlen(contents) : 0;
-      if (write(fd, contents, length) != length) {
-        fprintf(stderr, "src/detector.c: Could not write temporary file %s.\n", path);
-        exit(1);
-      }
-      close(fd);
-      tmpfile = 1;
-    }
-    char command[strlen(path) + 11];
-    sprintf(command, "file -b '%s'", path);
-    FILE *f = popen(command, "r");
-    if (f) {
-      if (fgets(line, sizeof(line), f) == NULL) {
-        fprintf(stderr, "src/detector.c: fgets() failed\n");
-        exit(1);
-      }
-      char *eol = line + strlen(line);
-      for (p = line; p < eol; p++) *p = tolower(*p);
-      p = strstr(line, "script text");
-      if (p && p == line) { // /^script text(?: executable)? for \w/
-        p = strstr(line, "for ");
-        if (p) {
-          p += 4;
-          pe = p;
-          while (isalnum(*pe)) pe++;
-          length = pe - p;
-          strncpy(buf, p, length);
-          buf[length] = '\0';
-          struct LanguageMap *rl = ohcount_hash_language_from_name(buf, length);
-          if (rl) language = rl->name;
-        }
-      } else if (p) { // /(\w+)(?: -\w+)* script text/
-        do {
-          p--;
-          pe = p;
-          while (*p == ' ') p--;
-          while (p != line && isalnum(*(p - 1))) p--;
-          if (p != line && *(p - 1) == '-') p--;
-        } while (*p == '-'); // Skip over any switches.
-        length = pe - p;
-        strncpy(buf, p, length);
-        buf[length] = '\0';
-        struct LanguageMap *rl = ohcount_hash_language_from_name(buf, length);
-        if (rl) language = rl->name;
-      } else if (strstr(line, "xml")) language = LANG_XML;
-      pclose(f);
-      if (tmpfile) {
-        remove(path);
-        free(path);
-      }
-    }
+    language = detect_language_magic(sourcefile);
   }
+
   if (language) {
     if (ISAMBIGUOUS(language)) {
       // Call the appropriate function for disambiguation.
@@ -219,6 +248,31 @@ const char *disambiguate_aspx(SourceFile *sourcefile) {
     }
   }
   return LANG_CS_ASPX;
+}
+
+// 6502 assembly or XML-based Advanced Stream Redirector ?
+const char *disambiguate_asx(SourceFile *sourcefile) {
+  char *p = ohcount_sourcefile_get_contents(sourcefile);
+  char *eof = p + ohcount_sourcefile_get_contents_size(sourcefile);
+  for (; p < eof; p++) {
+    switch (*p) {
+    case ' ':
+    case '\t':
+    case '\n':
+    case '\r':
+      break;
+    case '<':
+    case '\0':
+    // byte-order marks:
+    case (char) 0xef:
+    case (char) 0xfe:
+    case (char) 0xff:
+      return NULL; // XML
+    default:
+      return LANG_ASSEMBLER;
+    }
+  }
+  return LANG_ASSEMBLER; // only blanks - not valid XML, may be valid asm
 }
 
 const char *disambiguate_b(SourceFile *sourcefile) {
@@ -322,44 +376,102 @@ const char *disambiguate_cs(SourceFile *sourcefile) {
     return LANG_CSHARP;
 }
 
+const char *disambiguate_def(SourceFile *sourcefile) {
+  char *p = ohcount_sourcefile_get_contents(sourcefile);
+  char *eof = p + ohcount_sourcefile_get_contents_size(sourcefile);
+  for (; p < eof; p++) {
+    switch (*p) {
+    case ' ':
+    case '\t':
+    case '\n':
+    case '\r':
+      break;
+    case '(':
+      if (p[1] == '*') // Modula-2 comment
+        return LANG_MODULA2;
+      return NULL;
+    case 'D':
+      if (strncmp(p, "DEFINITION", 10) == 0) // Modula-2 "DEFINITION MODULE"
+        return LANG_MODULA2;
+      return NULL;
+    default:
+      return NULL; // not Modula-2
+    }
+  }
+  return NULL; // only blanks
+}
+
 const char *disambiguate_fortran(SourceFile *sourcefile) {
-  char *p, *pe;
+  char *p;
 
   p = ohcount_sourcefile_get_contents(sourcefile);
   char *eof = p + ohcount_sourcefile_get_contents_size(sourcefile);
+
+  // Try the assumption of a fixed formatted source code, and return free
+  // format if anything opposes this assumption.
+  // Rules based on the Fortran standard, page 47:
+  // ftp://ftp.nag.co.uk/sc22wg5/N1801-N1850/N1830.pdf
   while (p < eof) {
-    if (*p == ' ' && p + 5 < eof) {
-      int i;
-      for (i = 1; i <= 5; i++)
-        if (!isdigit(*(p + i)) && *(p + i) != ' ')
-          return LANG_FORTRANFIXED; // definately not f77
-      // Possibly fixed (doesn't match /^\s*\d+\s*$/).
-      pe = p;
-      while (*pe == ' ' || *pe == '\t') pe++;
-      if (pe - p <= 5) {
-        if (!isdigit(*pe))
-          return LANG_FORTRANFIXED;
-        while (isdigit(*pe)) pe++;
-        while (*pe == ' ' || *pe == '\t') pe++;
-        if (*pe != '\r' && *pe != '\n' && pe - p == 5)
-          return LANG_FORTRANFIXED;
-      }
-    }
-    while (*p != '\r' && *p != '\n' && *p != '&' && p < eof) p++;
-    if (*p == '&') {
-      p++;
-      // Look for free-form continuation.
-      while (*p == ' ' || *p == '\t') p++;
-      if (*p == '\r' || *p == '\n') {
-        pe = p;
-        while (*pe == '\r' || *pe == '\n' || *pe == ' ' || *pe == '\t') pe++;
-        if (*pe == '&')
+    int i = 1;
+    int blanklabel;
+    // Process a single line; tabulators are not valid in Fortran code
+    // but some compilers accept them to skip the first 5 columns.
+    if (*p == ' ' || *p == '\t' || isdigit(*p)) {
+      // Only consider lines starting with a blank or digit
+      // (non-comment in fixed)
+      if (*p == '\t') i = 5;
+      blanklabel = (*p == ' ' || *p == '\t');
+      while (*p != '\r' && *p != '\n' && p < eof) {
+        p++; i++;
+        if (i <= 5) {
+          blanklabel = blanklabel && (*p == ' ');
+          if ( !isdigit(*p) && *p != ' ' && *p != '!')
+            // Non-digit, non-blank, non-comment character in the label field
+            // definetly not valid fixed formatted code!
+            return LANG_FORTRANFREE;
+        }
+        if ((i == 6) && !blanklabel && *p != ' ' && *p != '0')
+          // Fixed format continuation line with non-blank label field
+          // not allowed, assume free format:
           return LANG_FORTRANFREE;
+        // Ignore comments (a ! character in column 6 is a continuation in
+        // fixed form)
+        if (*p == '!' && i != 6) {
+          while (*p != '\r' && *p != '\n' && p < eof) p++;
+        } else {
+          // Ignore quotes
+          if (*p == '"') {
+            if (p < eof) {p++; i++;}
+            while (*p != '"' && *p != '\r' && *p != '\n' && p < eof) {
+              p++; i++;
+            }
+          }
+          if (*p == '\'') {
+            if (p < eof) {p++; i++;}
+            while (*p != '\'' && *p != '\r' && *p != '\n' && p < eof) {
+              p++; i++;
+            }
+          }
+          // Check for free format line continuation
+          if (i > 6 && i <= 72 && *p == '&')
+            // Found an unquoted free format continuation character in the fixed
+            // format code section. This has to be free format.
+            return LANG_FORTRANFREE;
+        }
       }
+    } else {
+      // Not a statement line in fixed format...
+      if (*p != 'C' && *p != 'c' && *p != '*' && *p != '!')
+        // Not a valid fixed form comment, has to be free formatted source
+        return LANG_FORTRANFREE;
+      // Comment in fixed form, ignore this line
+      while (*p != '\r' && *p != '\n' && p < eof) p++;
     }
-    while (*p == '\r' || *p == '\n') p++;
+    // Skip all line ends
+    while ((*p == '\r' || *p == '\n') && p < eof) p++;
   }
-  return LANG_FORTRANFREE; // might as well be free-form
+  // Assume fixed format if none of the lines broke the assumptions
+  return LANG_FORTRANFIXED;
 }
 
 const char *disambiguate_h(SourceFile *sourcefile) {
@@ -472,15 +584,19 @@ const char *disambiguate_in(SourceFile *sourcefile) {
     char buf[length];
     strncpy(buf, p, length);
     buf[length] = '\0';
-    SourceFile *undecorated = ohcount_sourcefile_new(buf);
     p = ohcount_sourcefile_get_contents(sourcefile);
 		if (!p) {
 			return NULL;
 		}
-    // The filepath without the '.in' extension does not exist on disk. The
-    // sourcefile->diskpath field must be set incase the detector needs to run
-    // 'file -b' on the file.
-    ohcount_sourcefile_set_diskpath(undecorated, sourcefile->filepath);
+
+    // A SourceFile's filepath and diskpath need not be the same.
+    // Here, we'll take advantage of this to set up a new SourceFile
+    // whose filepath does not have the *.in extension, but whose
+    // diskpath still points back to the original file on disk (if any).
+    SourceFile *undecorated = ohcount_sourcefile_new(buf);
+    if (sourcefile->diskpath) {
+      ohcount_sourcefile_set_diskpath(undecorated, sourcefile->diskpath);
+    }
     ohcount_sourcefile_set_contents(undecorated, p);
 		undecorated->filenames = sourcefile->filenames;
     language = ohcount_sourcefile_get_language(undecorated);
@@ -653,39 +769,61 @@ const char *disambiguate_m(SourceFile *sourcefile) {
 
 #include <pcre.h>
 
+// strnlen is not available on OS X, so we roll our own
+size_t mystrnlen(const char *begin, size_t maxlen) {
+  if (begin == NULL)
+    return 0;
+  const char *end = memchr(begin, '\0', maxlen);
+  return end ? (end - begin) : maxlen;
+}
+
 const char *disambiguate_pp(SourceFile *sourcefile) {
 	char *p = ohcount_sourcefile_get_contents(sourcefile);
-  char *eof = p + ohcount_sourcefile_get_contents_size(sourcefile);
+
+	if (!p)
+	  return NULL;
 
 	/* prepare regular expressions */
-	pcre *re;
 	const char *error;
 	int erroffset;
-	re = pcre_compile("(define\\s+\\w+\\s*\\(|class \\s+\\w+\\s*{)", 0, &error, &erroffset, NULL);
 
-	for (; p < eof; p++) {
-		if (strncmp(p, "$include", 8) == 0 ||
-				strncmp(p, "$INCLUDE", 8) == 0 ||
-				strncmp(p, "end.", 4) == 0)
-			return LANG_PASCAL;
-		if (strncmp(p, "enable =>", 9) == 0 ||
-				strncmp(p, "ensure =>", 9) == 0 ||
-				strncmp(p, "content =>", 10) == 0 ||
-				strncmp(p, "source =>", 9) == 0 ||
-				strncmp(p, "include ", 8) == 0) 
-			return LANG_PUPPET;
+	/* try harder with optional spaces */
+	pcre *keyword;
+	keyword = pcre_compile("^\\s*(ensure|content|notify|require|source)\\s+=>",
+			PCRE_MULTILINE, &error, &erroffset, NULL);
 
-		/* regexp for checking for define and class declarations */
-		
-		int rc;
-		int ovector[30];
-		rc = pcre_exec(re, NULL, p, strlen(p), 0, 0, ovector, 30);
-		if(rc > 0) {
-			return LANG_PUPPET;
-		}
+	if (pcre_exec(keyword, NULL, p, mystrnlen(p, 10000), 0, 0, NULL, 0) > -1)
+		return LANG_PUPPET;
 
-	}
+	/* check for standard puppet constructs */
+	pcre *construct;
+	construct = pcre_compile("^\\s*(define\\s+[\\w:-]+\\s*\\(|class\\s+[\\w:-]+(\\s+inherits\\s+[\\w:-]+)?\\s*{|node\\s+\\'?[\\w:\\.-]+\\'?\\s*{|import\\s+\")",
+			PCRE_MULTILINE, &error, &erroffset, NULL);
+
+	if (pcre_exec(construct, NULL, p, mystrnlen(p, 10000), 0, 0, NULL, 0) > -1)
+		return LANG_PUPPET;
+
 	return LANG_PASCAL;
+}
+
+const char *disambiguate_pl(SourceFile *sourcefile) {
+	char *contents = ohcount_sourcefile_get_contents(sourcefile);
+  if (!contents)
+    return NULL;
+
+  // Check for a perl shebang on first line of file
+	const char *error;
+	int erroffset;
+	pcre *re = pcre_compile("#![^\\n]*perl", PCRE_CASELESS, &error, &erroffset, NULL);
+  if (pcre_exec(re, NULL, contents, mystrnlen(contents, 100), 0, PCRE_ANCHORED, NULL, 0) > -1)
+    return LANG_PERL;
+
+  // Check for prolog :- rules
+  if (strstr(contents, ":- ") || strstr(contents, ":-\n"))
+    return LANG_PROLOG;
+
+  // Perl by default.
+  return LANG_PERL;
 }
 
 #define QMAKE_SOURCES_SPACE "SOURCES +="
@@ -704,6 +842,26 @@ const char *disambiguate_pro(SourceFile *sourcefile) {
 			return LANG_MAKE; // really QMAKE
 	}
 	return LANG_IDL_PVWAVE;
+}
+
+const char *disambiguate_r(SourceFile *sourcefile) {
+  char *contents = ohcount_sourcefile_get_contents(sourcefile);
+  if (!contents)
+    return LANG_R;
+
+  char *eof = contents + ohcount_sourcefile_get_contents_size(sourcefile);
+
+  // Detect REBOL by looking for the occurence of "rebol" in the contents
+  // (case-insensitive). Correct REBOL scripts have a "REBOL [...]" header
+  // block.
+  char *needle = "rebol";
+  int len = strlen(needle);
+  for (; contents < eof - len; ++contents)
+    if (tolower(*contents) == *needle &&
+          !strncasecmp(contents, needle, len))
+      return LANG_REBOL;
+
+  return LANG_R;
 }
 
 const char *disambiguate_st(SourceFile *sourcefile) {
