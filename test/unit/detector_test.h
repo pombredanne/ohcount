@@ -59,6 +59,16 @@ void test_detector_smalltalk() {
   ASSERT_NODETECT("english.st");
 }
 
+void test_detector_disambiguate_asx() {
+  ASSERT_DETECT(LANG_ASSEMBLER, "assembler6502.asx");
+  ASSERT_NODETECT("AdvancedStreamRedirector.asx");
+}
+
+void test_detector_disambiguate_def() {
+  ASSERT_DETECT(LANG_MODULA2, "sampleDef.def");
+  ASSERT_NODETECT("module-definition.def");
+}
+
 void test_detector_disambiguate_m() {
   ASSERT_DETECT(LANG_OBJECTIVE_C, "t1.m");
   ASSERT_DETECT(LANG_OBJECTIVE_C, "t2.m");
@@ -70,10 +80,26 @@ void test_detector_disambiguate_m() {
 
 void test_detector_disambiguate_in() {
   ASSERT_NODETECT("empty.in");
+  ASSERT_NODETECT("foo.in.in");
 }
+
+void test_detector_disambiguate_pl() {
+  ASSERT_DETECT(LANG_PERL, "foo_perl1.pl");
+  ASSERT_DETECT(LANG_PERL, "foo_perl2.pl");
+  ASSERT_DETECT(LANG_PROLOG, "foo_prolog1.pl");
+  ASSERT_DETECT(LANG_PERL, "perl_with_smiley.pl");
+  ASSERT_DETECT(LANG_PERL, "perl_shebang_prolog_body.pl");
+}
+
 void test_detector_disambiguate_pro() {
   ASSERT_DETECT(LANG_IDL_PVWAVE, "foo.pro");
   ASSERT_DETECT(LANG_MAKE, "qmake.pro");
+}
+
+void test_detector_disambiguate_r() {
+  ASSERT_DETECT(LANG_R, "foo_r.R");
+  ASSERT_DETECT(LANG_REBOL, "foo_rebol_lower.r");
+  ASSERT_DETECT(LANG_REBOL, "foo_rebol_upper.r");
 }
 
 void test_detector_fortran_fixedfree() {
@@ -93,27 +119,38 @@ void test_detector_detect_polyglot() {
   ASSERT_DETECT(LANG_PHP, "upper_case_php");
   ASSERT_DETECT(LANG_SMALLTALK, "example.st");
   ASSERT_DETECT(LANG_VALA, "foo.vala");
+  ASSERT_DETECT(LANG_TEX_DTX, "foo.dtx");
   ASSERT_DETECT(LANG_TEX, "foo.tex");
   ASSERT_DETECT(LANG_XSLT, "example.xsl");
+  ASSERT_DETECT(LANG_LOGTALK, "foo.lgt");
   ASSERT_DETECT(LANG_LISP, "core.lisp");
   ASSERT_DETECT(LANG_DMD, "foo.d");
   ASSERT_DETECT(LANG_VIM, "foo.vim");
+  ASSERT_DETECT(LANG_EC, "foo.ec");
+  ASSERT_DETECT(LANG_EC, "foo.eh");
   ASSERT_DETECT(LANG_EBUILD, "foo.ebuild");
   ASSERT_DETECT(LANG_EBUILD, "foo.eclass");
   ASSERT_DETECT(LANG_EXHERES, "foo.exheres-0");
   ASSERT_DETECT(LANG_EXHERES, "foo.exlib");
   ASSERT_DETECT(LANG_EIFFEL, "eiffel.e");
   ASSERT_DETECT(LANG_OCAML, "ocaml.ml");
+  ASSERT_DETECT(LANG_AUGEAS, "augeas.aug");
   ASSERT_DETECT(LANG_STRATEGO, "stratego.str");
-  ASSERT_DETECT(LANG_R, "foo.R");
   ASSERT_DETECT(LANG_GLSL, "foo.glsl");
   ASSERT_DETECT(LANG_GLSL, "foo_glsl.vert");
   ASSERT_DETECT(LANG_GLSL, "foo_glsl.frag");
   ASSERT_DETECT(LANG_IDL_PVWAVE, "foo.pro");
   ASSERT_DETECT(LANG_ASSEMBLER, "foo.z80");
   ASSERT_DETECT(LANG_PHP, "php.inc");
+  ASSERT_DETECT(LANG_FORTH, "forth.4th");
+  ASSERT_DETECT(LANG_FORTH, "forth.fr");
   ASSERT_DETECT(LANG_FSHARP, "fs1.fs");
   ASSERT_DETECT(LANG_AUTOCONF, "m4.m4");
+  ASSERT_DETECT(LANG_NSIS, "foo.nsi");
+  ASSERT_DETECT(LANG_NSIS, "foo.nsh");
+  ASSERT_DETECT(LANG_COFFEESCRIPT, "foo.coffee");
+  ASSERT_DETECT(LANG_QML, "foo.qml");
+  ASSERT_DETECT(LANG_COQ, "coq.v");
   ASSERT_NODETECT("empty.inc");
 }
 
@@ -162,11 +199,28 @@ void test_detector_emacs_mode() {
 	ASSERT_DETECT(LANG_C, "emacs_mode.c");
 }
 
+void test_detector_puppet(){
+  ASSERT_DETECT(LANG_PUPPET, "puppet_import.pp");
+  ASSERT_DETECT(LANG_PUPPET, "puppet_test.pp");
+}
+
+void test_detector_genie(){
+  ASSERT_DETECT(LANG_GENIE, "client-osx.gs");
+}
+
+void test_non_existent_file(){
+  ASSERT_NODETECT("xxx_non_exists_xxxi.pp");  
+}
+
 void all_detector_tests() {
   test_detector_smalltalk();
+  test_detector_disambiguate_asx();
+  test_detector_disambiguate_def();
   test_detector_disambiguate_m();
   test_detector_disambiguate_in();
+  test_detector_disambiguate_pl();
   test_detector_disambiguate_pro();
+  test_detector_disambiguate_r();
   test_detector_fortran_fixedfree();
   test_detector_detect_polyglot();
   test_detector_upper_case_extensions();
@@ -176,4 +230,7 @@ void all_detector_tests() {
   test_detector_xml_with_custom_extension();
   test_detector_brainfuck();
   test_detector_emacs_mode();
+  test_detector_puppet();
+  test_detector_genie();
+  test_non_existent_file();
 }
