@@ -37,8 +37,8 @@ const char *magic_parse(char *line) {
   size_t length;
 
   for (p = line; p < eol; p++) *p = tolower(*p);
-  p = strstr(line, "script text");
-  if (p && p == line) { // /^script text(?: executable)? for \w/
+  p = strstr(line, "script text"); // Example: "script text executable for perl -w,"
+  if (p && p == line) {
     p = strstr(line, "for ");
     if (p) {
       p += 4;
@@ -50,7 +50,10 @@ const char *magic_parse(char *line) {
       struct LanguageMap *rl = ohcount_hash_language_from_name(buf, length);
       if (rl) return(rl->name);
     }
-  } else if (p) { // /(\w+)(?: -\w+)* script text/
+  }
+
+  p = strstr(line, "script"); // Example: "PHP script, ASCII text"
+  if (p) {
     do {
       p--;
       pe = p;
@@ -119,79 +122,79 @@ const char *ohcount_detect_language(SourceFile *sourcefile) {
   char *p, *pe;
   int length;
 
-  // Attempt to detect using Emacs mode line (/^-\*-\s*mode[\s:]*\w/i).
-  char line[81] = { '\0' }, buf[81];
-  p = ohcount_sourcefile_get_contents(sourcefile);
-  pe = p;
-  char *eof = p + ohcount_sourcefile_get_contents_size(sourcefile);
-  while (pe < eof) {
-    // Get the contents of the first line.
-    while (pe < eof && *pe != '\r' && *pe != '\n') pe++;
-    length = (pe - p <= sizeof(line)) ? pe - p : sizeof(line);
-    strncpy(line, p, length);
-    line[length] = '\0';
-    if (*line == '#' && *(line + 1) == '!') {
-      // First line was sh-bang; loop to get contents of second line.
-      while (*pe == '\r' || *pe == '\n') pe++;
-      p = pe;
-    } else break;
-  }
-  p = strstr(line, "-*-");
-  if (p) {
-    p += 3;
-    while (*p == ' ' || *p == '\t') p++;
-    // detect "mode" (any capitalization)
-    if (strncasecmp(p, "mode", 4) == 0) {
-      p += 4;
-      while (*p == ' ' || *p == '\t' || *p == ':') p++;
-    }
-    pe = p;
-    while (!isspace(*pe) && *pe != ';' && pe != strstr(pe, "-*-")) pe++;
-    length = (pe - p <= sizeof(buf)) ? pe - p : sizeof(buf);
-    strncpy(buf, p, length);
-    buf[length] = '\0';
-
-		// Special case for "c" or "C" emacs mode header: always means C, not C++
-		if (strcasecmp(buf, "c") == 0) {
-				return LANG_C;
-		}
-
-    // First try it with the language name.
-    struct LanguageMap *rl = ohcount_hash_language_from_name(buf, length);
-    if (rl) language = rl->name;
-    if(!language) {
-      // Then try it with the extension table.
-      struct ExtensionMap *re = ohcount_hash_language_from_ext(buf, length);
-      if (re) language = re->value;
-    }
-    if (!language) {
-      // Try the lower-case version of this modeline.
-      for (pe = buf; pe < buf+length; pe++) *pe = tolower(*pe);
-      // First try it with the language name.
-      rl = ohcount_hash_language_from_name(buf, length);
-      if (rl) language = rl->name;
-    }
-    if (!language) {
-      // Then try it with the extension table.
-      struct ExtensionMap *re = ohcount_hash_language_from_ext(buf, length);
-      if (re) language = re->value;
-    }
-  }
-
   // Attempt to detect based on file extension.
-  if(!language) {
-      length = strlen(sourcefile->ext);
-      struct ExtensionMap *re = ohcount_hash_language_from_ext(sourcefile->ext,
+  length = strlen(sourcefile->ext);
+  struct ExtensionMap *re = ohcount_hash_language_from_ext(sourcefile->ext,
                                                                length);
-      if (re) language = re->value;
-    if (!language) {
-      // Try the lower-case version of this extension.
-      char lowerext[length + 1];
-      strncpy(lowerext, sourcefile->ext, length);
-      lowerext[length] = '\0';
-      for (p = lowerext; p < lowerext + length; p++) *p = tolower(*p);
-      struct ExtensionMap *re = ohcount_hash_language_from_ext(lowerext, length);
-      if (re) language = re->value;
+  if (re) language = re->value;
+  if (!language) {
+    // Try the lower-case version of this extension.
+    char lowerext[length + 1];
+    strncpy(lowerext, sourcefile->ext, length);
+    lowerext[length] = '\0';
+    for (p = lowerext; p < lowerext + length; p++) *p = tolower(*p);
+    struct ExtensionMap *re = ohcount_hash_language_from_ext(lowerext, length);
+    if (re) language = re->value;
+  }
+
+  // Attempt to detect using Emacs mode line (/^-\*-\s*mode[\s:]*\w/i).
+  if(!language) {
+    char line[81] = { '\0' }, buf[81];
+    p = ohcount_sourcefile_get_contents(sourcefile);
+    pe = p;
+    char *eof = p + ohcount_sourcefile_get_contents_size(sourcefile);
+    while (pe < eof) {
+      // Get the contents of the first line.
+      while (pe < eof && *pe != '\r' && *pe != '\n') pe++;
+      length = (pe - p <= sizeof(line)) ? pe - p : sizeof(line);
+      strncpy(line, p, length);
+      line[length] = '\0';
+      if (*line == '#' && *(line + 1) == '!') {
+        // First line was sh-bang; loop to get contents of second line.
+        while (*pe == '\r' || *pe == '\n') pe++;
+        p = pe;
+      } else break;
+    }
+    p = strstr(line, "-*-");
+    if (p) {
+      p += 3;
+      while (*p == ' ' || *p == '\t') p++;
+      // detect "mode" (any capitalization)
+      if (strncasecmp(p, "mode", 4) == 0) {
+        p += 4;
+        while (*p == ' ' || *p == '\t' || *p == ':') p++;
+      }
+      pe = p;
+      while (!isspace(*pe) && *pe != ';' && pe != strstr(pe, "-*-")) pe++;
+      length = (pe - p <= sizeof(buf)) ? pe - p : sizeof(buf);
+      strncpy(buf, p, length);
+      buf[length] = '\0';
+
+		  // Special case for "c" or "C" emacs mode header: always means C, not C++
+		  if (strcasecmp(buf, "c") == 0) {
+				return LANG_C;
+		  }
+
+      // First try it with the language name.
+      struct LanguageMap *rl = ohcount_hash_language_from_name(buf, length);
+      if (rl) language = rl->name;
+      if(!language) {
+        // Then try it with the extension table.
+        struct ExtensionMap *re = ohcount_hash_language_from_ext(buf, length);
+        if (re) language = re->value;
+      }
+      if (!language) {
+        // Try the lower-case version of this modeline.
+        for (pe = buf; pe < buf+length; pe++) *pe = tolower(*pe);
+        // First try it with the language name.
+        rl = ohcount_hash_language_from_name(buf, length);
+        if (rl) language = rl->name;
+      }
+      if (!language) {
+        // Then try it with the extension table.
+        struct ExtensionMap *re = ohcount_hash_language_from_ext(buf, length);
+        if (re) language = re->value;
+      }
     }
   }
 
@@ -862,6 +865,35 @@ const char *disambiguate_r(SourceFile *sourcefile) {
       return LANG_REBOL;
 
   return LANG_R;
+}
+
+const char *disambiguate_rs(SourceFile *sourcefile) {
+  // .rs is normally Rust, but it might be RenderScript. RenderScript is
+  // expected to have a "#pragma version(1)" line at the very start, possibly
+  // after comments. To help with supporting future versions of RenderScript,
+  // we'll skip the number part.
+  // As RenderScript is not implemented in ohcount yet, it's returned as NULL.
+  char *contents = ohcount_sourcefile_get_contents(sourcefile);
+  if (!contents) {
+    return LANG_RUST;
+  }
+
+  char *needle = "\n#pragma version";
+  int len = strlen(needle);
+  if (strncasecmp(contents, needle + 1, len - 1) == 0) {
+    // "#pragma version" at the very start of the file is RenderScript.
+    return NULL;
+  }
+
+  char *eof = contents + ohcount_sourcefile_get_contents_size(sourcefile);
+
+  for (; contents < eof - len; ++contents) {
+    if (!strncmp(contents, needle, len)) {
+      return NULL;
+    }
+  }
+
+  return LANG_RUST;
 }
 
 const char *disambiguate_st(SourceFile *sourcefile) {

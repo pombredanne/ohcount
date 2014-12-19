@@ -196,7 +196,12 @@ void test_detector_brainfuck() {
 }
 
 void test_detector_emacs_mode() {
-	ASSERT_DETECT(LANG_C, "emacs_mode.c");
+	ASSERT_DETECT(LANG_C, "emacs_mode_c");
+}
+
+void test_detector_emacs_with_extension() {
+  ASSERT_DETECT(LANG_RUBY, "java_emac.rb");
+  ASSERT_DETECT(LANG_JAVASCRIPT, "javascript_emac.js");
 }
 
 void test_detector_puppet(){
@@ -206,6 +211,12 @@ void test_detector_puppet(){
 
 void test_detector_genie(){
   ASSERT_DETECT(LANG_GENIE, "client-osx.gs");
+}
+
+void test_detector_rust(){
+  ASSERT_DETECT(LANG_RUST, "rust.rs");
+  // When RenderScript is implemented, this will, of course, need to be removed.
+  ASSERT_NODETECT("renderscript.rs");
 }
 
 void test_non_existent_file(){
@@ -230,7 +241,9 @@ void all_detector_tests() {
   test_detector_xml_with_custom_extension();
   test_detector_brainfuck();
   test_detector_emacs_mode();
+  test_detector_emacs_with_extension();
   test_detector_puppet();
   test_detector_genie();
+  test_detector_rust();
   test_non_existent_file();
 }
